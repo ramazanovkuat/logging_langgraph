@@ -177,6 +177,7 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
     # you'd want to include it. You could update the API to return a list of ChatMessages
     # in that case.
     agent: Pregel = get_agent(agent_id)
+    logger.info("User message for %s: %s", agent_id, user_input.message)
     kwargs, run_id = await _handle_input(user_input, agent)
 
     try:
@@ -190,7 +191,7 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
             )
         else:
             raise ValueError(f"Unexpected response type: {response_type}")
-
+        logger.info("Agent %s response: %s", agent_id, output.content)
         output.run_id = str(run_id)
         return ChatResponse(status="success", data=output)
     except Exception as e:
@@ -208,6 +209,7 @@ async def message_generator(
     This is the workhorse method for the /stream endpoint.
     """
     agent: Pregel = get_agent(agent_id)
+    logger.info("User message for %s: %s", agent_id, user_input.message)
     kwargs, run_id = await _handle_input(user_input, agent)
 
     try:
@@ -276,6 +278,7 @@ async def message_generator(
                 if chat_message.type == "human" and chat_message.content == user_input.message:
                     continue
                 if chat_message.type == "ai" and chat_message.model_dump().get("response_metadata", {}).get("finish_reason") == "stop":
+                    logger.info("Agent %s streamed message: %s", agent_id, chat_message.content)
                     yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
                 else:
                     continue

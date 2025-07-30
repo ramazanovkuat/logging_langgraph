@@ -5,7 +5,7 @@ from langgraph.pregel import Pregel
 from agents.agent import agent
 from schema import AgentInfo
 
-DEFAULT_AGENT = "clothes-agent"
+DEFAULT_AGENT = "agent"
 
 
 @dataclass
@@ -15,7 +15,7 @@ class Agent:
 
 
 agents: dict[str, Agent] = {
-    "clothes-agent": Agent(
+    "agent": Agent(
         description="An agent", graph=agent
     ),
 }

@@ -11,11 +11,11 @@ class AgentInfo(BaseModel):
 
     key: str = Field(
         description="Agent key.",
-        examples=["clothes-agent"],
+        examples=["agent"],
     )
     description: str = Field(
         description="Description of the agent.",
-        examples=["An agent that helps with clothes-related queries."],
+        examples=["An agent that helps with commont queries."],
     )
 
 
@@ -30,7 +30,7 @@ class ServiceMetadata(BaseModel):
     )
     default_agent: str = Field(
         description="Default agent used when none is specified.",
-        examples=["clothes-agent"],
+        examples=["agent"],
     )
     default_model: AllModelEnum = Field(
         description="Default model used when none is specified.",
@@ -42,7 +42,7 @@ class UserInput(BaseModel):
 
     message: str = Field(
         description="User input to the agent.",
-        examples=["Подбери одежду для сварщика"],
+        examples=["Расскажи о стоицизме"],
     )
     model: SerializeAsAny[AllModelEnum] | None = Field(
         title="Model",
