@@ -1,0 +1,8 @@
+{
+    "python_version": "3.12",
+    "dependencies": ["."],
+    "graphs": {
+        "research_assistant": "./src/agents/clothes_agent.py:clothes_agent"
+    },
+    "env": "./.env"
+}

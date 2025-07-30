@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-agent_service}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  agent_service:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.service
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    develop:
+      watch:
+        - path: src/agents/
+          action: sync+restart
+          target: /app/agents/
+        - path: src/schema/
+          action: sync+restart
+          target: /app/schema/
+        - path: src/service/
+          action: sync+restart
+          target: /app/service/
+        - path: src/core/
+          action: sync+restart
+          target: /app/core/
+        - path: src/memory/
+          action: sync+restart
+          target: /app/memory/
+
+  # ── Loki ─────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.4.1
+    container_name: loki
+    command: -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+
+  # ── Fluent Bit ───────────────────────────────────────────────────
+  fluent-bit:
+    image: cr.fluentbit.io/fluent/fluent-bit:4.0
+    container_name: fluent-bit
+    depends_on:
+      - loki
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    command: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+    ports:
+      - "2020:2020"   # метрики агента
+
+  # ── Grafana ──────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3005:3000"           # ← наружу 3005, внутри 3000 (стандартный порт Grafana)
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - loki
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  postgres_data:
+  loki_data:
+  grafana_data:
