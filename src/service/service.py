@@ -177,11 +177,10 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
     agent: Pregel = get_agent(agent_id)
     kwargs, run_id, thread_id, user_id = await _handle_input(user_input, agent)
     logger.info(
-        "User message for %s [user_id=%s thread_id=%s]: %s",
+        "User message for %s: %s",
         agent_id,
-        user_id,
-        thread_id,
         user_input.message,
+        extra={"user_id": user_id, "thread_id": thread_id},
     )
 
     try:
@@ -197,11 +196,10 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
             raise ValueError(f"Unexpected response type: {response_type}")
 
         logger.info(
-            "Agent %s response [user_id=%s thread_id=%s]: %s",
+            "Agent %s response: %s",
             agent_id,
-            user_id,
-            thread_id,
             output.content,
+            extra={"user_id": user_id, "thread_id": thread_id},
         )
         output.run_id = str(run_id)
         return ChatResponse(status="success", data=output)
@@ -221,11 +219,10 @@ async def message_generator(
     agent: Pregel = get_agent(agent_id)
     kwargs, run_id, thread_id, user_id = await _handle_input(user_input, agent)
     logger.info(
-        "User message for %s [user_id=%s thread_id=%s]: %s",
+        "User message for %s: %s",
         agent_id,
-        user_id,
-        thread_id,
         user_input.message,
+        extra={"user_id": user_id, "thread_id": thread_id},
     )
 
     try:
@@ -299,11 +296,10 @@ async def message_generator(
                     == "stop"
                 ):
                     logger.info(
-                        "Agent %s streamed message [user_id=%s thread_id=%s]: %s",
+                        "Agent %s streamed message: %s",
                         agent_id,
-                        user_id,
-                        thread_id,
                         chat_message.content,
+                        extra={"user_id": user_id, "thread_id": thread_id},
                     )
                     yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
                 else:

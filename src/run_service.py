@@ -1,6 +1,6 @@
 import asyncio
-import sys
 import logging
+import sys
 
 import uvicorn
 from dotenv import load_dotenv
@@ -8,7 +8,23 @@ from dotenv import load_dotenv
 from core import settings
 
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
+
+# Ensure custom fields are always present in LogRecord
+old_factory = logging.getLogRecordFactory()
+
+
+def record_factory(*args, **kwargs):
+    record = old_factory(*args, **kwargs)
+    record.user_id = getattr(record, "user_id", "-")
+    record.thread_id = getattr(record, "thread_id", "-")
+    return record
+
+
+logging.setLogRecordFactory(record_factory)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - [user_id=%(user_id)s thread_id=%(thread_id)s] %(message)s",
+)
 
 if __name__ == "__main__":
     # Set Compatible event loop policy on Windows Systems.
