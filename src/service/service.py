@@ -39,7 +39,6 @@ from schema import (
     UserInput,
 )
 from service.utils import (
-    convert_message_content_to_string,
     langchain_to_chat_message,
     remove_tool_call_messages,
     remove_tool_calls,
@@ -108,11 +107,10 @@ async def info() -> ServiceMetadata:
     )
 
 
-async def _handle_input(user_input: UserInput, agent: Pregel) -> tuple[dict[str, Any], UUID]:
-    """
-    Parse user input and handle any required interrupt resumption.
-    Returns kwargs for agent invocation and the run_id.
-    """
+async def _handle_input(
+    user_input: UserInput, agent: Pregel
+) -> tuple[dict[str, Any], UUID, str, str]:
+    """Prepare agent invocation kwargs and IDs."""
     run_id = uuid4()
     thread_id = user_input.thread_id or str(uuid4())
     user_id = user_input.user_id or str(uuid4())
@@ -158,7 +156,7 @@ async def _handle_input(user_input: UserInput, agent: Pregel) -> tuple[dict[str,
         "config": config,
     }
 
-    return kwargs, run_id
+    return kwargs, run_id, thread_id, user_id
 
 
 @router.post("/{agent_id}/invoke")
@@ -177,8 +175,14 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
     # you'd want to include it. You could update the API to return a list of ChatMessages
     # in that case.
     agent: Pregel = get_agent(agent_id)
-    logger.info("User message for %s: %s", agent_id, user_input.message)
-    kwargs, run_id = await _handle_input(user_input, agent)
+    kwargs, run_id, thread_id, user_id = await _handle_input(user_input, agent)
+    logger.info(
+        "User message for %s [user_id=%s thread_id=%s]: %s",
+        agent_id,
+        user_id,
+        thread_id,
+        user_input.message,
+    )
 
     try:
         response_events: list[tuple[str, Any]] = await agent.ainvoke(**kwargs, stream_mode=["updates", "values"])  # type: ignore # fmt: skip
@@ -191,13 +195,19 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatRe
             )
         else:
             raise ValueError(f"Unexpected response type: {response_type}")
-        logger.info("Agent %s response: %s", agent_id, output.content)
+
+        logger.info(
+            "Agent %s response [user_id=%s thread_id=%s]: %s",
+            agent_id,
+            user_id,
+            thread_id,
+            output.content,
+        )
         output.run_id = str(run_id)
         return ChatResponse(status="success", data=output)
     except Exception as e:
         logger.error(f"An exception occurred: {e}")
         return ChatResponse(status="error", data={"detail": "Unexpected error"})
-
 
 
 async def message_generator(
@@ -209,8 +219,14 @@ async def message_generator(
     This is the workhorse method for the /stream endpoint.
     """
     agent: Pregel = get_agent(agent_id)
-    logger.info("User message for %s: %s", agent_id, user_input.message)
-    kwargs, run_id = await _handle_input(user_input, agent)
+    kwargs, run_id, thread_id, user_id = await _handle_input(user_input, agent)
+    logger.info(
+        "User message for %s [user_id=%s thread_id=%s]: %s",
+        agent_id,
+        user_id,
+        thread_id,
+        user_input.message,
+    )
 
     try:
         # Process streamed events from the graph and yield messages over the SSE stream.
@@ -277,8 +293,18 @@ async def message_generator(
                 # LangGraph re-sends the input message, which feels weird, so drop it
                 if chat_message.type == "human" and chat_message.content == user_input.message:
                     continue
-                if chat_message.type == "ai" and chat_message.model_dump().get("response_metadata", {}).get("finish_reason") == "stop":
-                    logger.info("Agent %s streamed message: %s", agent_id, chat_message.content)
+                if (
+                    chat_message.type == "ai"
+                    and chat_message.model_dump().get("response_metadata", {}).get("finish_reason")
+                    == "stop"
+                ):
+                    logger.info(
+                        "Agent %s streamed message [user_id=%s thread_id=%s]: %s",
+                        agent_id,
+                        user_id,
+                        thread_id,
+                        chat_message.content,
+                    )
                     yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
                 else:
                     continue
@@ -297,7 +323,7 @@ async def message_generator(
                     # Empty content in the context of OpenAI usually means
                     # that the model is asking for a tool to be invoked.
                     # So we only print non-empty content.
-                    
+
                     # This part is commented out because for omitting tool calls
                     # yield f"data: {json.dumps({'type': 'token', 'content': convert_message_content_to_string(content)})}\n\n"
                     continue
@@ -305,7 +331,7 @@ async def message_generator(
         logger.error(f"Error in message generator: {e}")
         yield f"data: {json.dumps({'type': 'error', 'content': 'Internal server error'})}\n\n"
     finally:
-        yield "data: [DONE]\n\n" 
+        yield "data: [DONE]\n\n"
 
 
 def _create_ai_message(parts: dict) -> AIMessage:
@@ -329,7 +355,9 @@ def _sse_response_example() -> dict[int | str, Any]:
     }
 
 
-@router.post("/{agent_id}/stream", response_class=StreamingResponse, responses=_sse_response_example())
+@router.post(
+    "/{agent_id}/stream", response_class=StreamingResponse, responses=_sse_response_example()
+)
 @router.post("/stream", response_class=StreamingResponse, responses=_sse_response_example())
 async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> StreamingResponse:
     """
@@ -390,7 +418,8 @@ async def history(input: ChatHistoryInput) -> ChatHistoryResponse:
     except Exception as e:
         logger.error(f"An exception occurred: {e}")
         return ChatHistoryResponse(status="error", data={"detail": "Unexpected error"})
-    
+
+
 @router.post("/history_cleaned")
 async def history_cleaned(input: ChatHistoryInput) -> ChatHistoryResponse:
     """
@@ -414,6 +443,7 @@ async def history_cleaned(input: ChatHistoryInput) -> ChatHistoryResponse:
     except Exception as e:
         logger.error(f"An exception occurred: {e}")
         return ChatHistoryResponse(status="error", data={"detail": "Unexpected error"})
+
 
 @app.get("/health")
 async def health_check():
