@@ -24,15 +24,7 @@ with open(SYSTEM_MESSAGE_PATH, "r", encoding="utf-8") as f:
 def assistant(state: MessagesState):
     system_message = MODEL_SYSTEM_MESSAGE
     messages = [SystemMessage(content=system_message)] + state["messages"]
-    logger.info(
-        "Incoming messages [user_id=%s thread_id=%s]: %s",
-        [m.content for m in state["messages"]],
-    )
     response = llm.invoke(messages)
-    logger.info(
-        "Assistant response [user_id=%s thread_id=%s]: %s",
-        getattr(response, "content", str(response)),
-    )
     return {"messages": response}
 
 
