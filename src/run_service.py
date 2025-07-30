@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import logging
 
 import uvicorn
 from dotenv import load_dotenv
@@ -7,6 +8,7 @@ from dotenv import load_dotenv
 from core import settings
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     # Set Compatible event loop policy on Windows Systems.
